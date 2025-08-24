@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Đại Hội Võ Thuật</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{--card:rgba(255,255,255,.85);--cardDark:rgba(18,18,18,.78)}
+    .glass{backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px)}
+    #bgVideo{position:fixed;right:0;bottom:0;min-width:100%;min-height:100%;object-fit:cover;z-index:-2}
+    .bg-overlay{position:fixed;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.25));z-index:-1;transition:background .2s}
+    .post-grid{scroll-snap-type:x mandatory}
+    .post-card{scroll-snap-align:center}
+    .emoji-bubble{position:absolute; bottom:60px; left:50%; transform:translateX(-50%); display:none}
+    .comment-stream{max-height:240px; overflow-y:auto}
+    .admin-only{display:none}
+    /* Floating music player */
+    #musicFloating{position:fixed; left:12px; bottom:12px; z-index:40}
+    /* Profile route view overlay */
+    #profileOverlay{position:fixed; inset:0; z-index:50; display:none}
+    #profileOverlay.show{display:block}
+    /* Notification dropdown */
+    #notifDropdown{position:absolute; right:0; top:100%; min-width:280px; z-index:40}
+  </style>
+</head>
+<body class="min-h-screen text-slate-900 dark:bg-neutral-950 dark:text-slate-100">
+
+  <!-- ===== Background video (Code 1) ===== -->
+  <video autoplay muted loop playsinline id="bgVideo">
+    <source src="background.mp4" type="video/mp4">
+  </video>
+  <div class="bg-overlay" id="bgOverlay"></div>
+
+  <!-- ===== Top Bar ===== -->
+  <header class="glass sticky top-0 z-30">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between relative">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🥋</span>
+        <h1 class="text-xl font-bold">Đại Hội Võ Thuật</h1>
+        <span id="badgeRandom" class="hidden ml-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="onlineCount" class="text-sm opacity-90">0 online</span>
+
+        <!-- Notifications -->
+        <div class="relative">
+          <button id="notifBtn" class="px-3 py-1.5 rounded-xl bg-black/70 text-white dark:bg-white/20 relative">
+            🔔
+            <span id="notifBadge" class="hidden absolute -top-2 -right-2 text-xs bg-red-600 text-white rounded-full px-1.5"></span>
+          </button>
+          <div id="notifDropdown" class="hidden glass rounded-xl bg-white/80 dark:bg-black/60 p-2">
+            <div class="flex items-center justify-between mb-2">
+              <div class="font-semibold">Thông báo</div>
+              <button id="markAllRead" class="text-xs px-2 py-1 rounded bg-black/70 text-white">Đánh dấu đã đọc</button>
+            </div>
+            <ul id="notifList" class="space-y-1 max-h-80 overflow-y-auto text-sm"></ul>
+          </div>
+        </div>
+
+        <button id="themeToggle" class="px-3 py-1.5 rounded-xl bg-black/70 text-white dark:bg-white/20">🌗</button>
+        <button id="bgToggle" class="px-3 py-1.5 rounded-xl bg-black/70 text-white dark:bg-white/20">Tắt nền</button>
+        <button id="logoutBtn" class="px-3 py-1.5 rounded-xl bg-red-600 text-white hidden">Đăng xuất</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Auth Views ===== -->
+  <main class="mx-auto max-w-6xl p-4 space-y-6">
+    <!-- Auth Card -->
+    <section id="authView" class="glass rounded-2xl p-6 bg-white/70 dark:bg-black/50">
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Đăng nhập</h2>
+          <form id="loginForm" class="space-y-3">
+            <input id="loginEmail" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Email" type="email" required>
+            <input id="loginPassword" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Mật khẩu" type="password" required>
+            <button class="w-full py-2 rounded-xl bg-indigo-600 text-white">Đăng nhập</button>
+            <button id="forgotBtn" type="button" class="w-full py-2 rounded-xl bg-black/70 text-white">Quên mật khẩu</button>
+          </form>
+        </div>
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Đăng ký</h2>
+          <form id="registerForm" class="space-y-3">
+            <input id="regDisplayName" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Tên tài khoản" required>
+            <input id="regEmail" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Email" type="email" required>
+            <input id="regPassword" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Mật khẩu" type="password" required>
+            <button class="w-full py-2 rounded-xl bg-emerald-600 text-white">Tạo tài khoản</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Main App (hidden until login) ===== -->
+    <section id="appView" class="hidden space-y-6">
+
+      <!-- Profile + Actions -->
+      <div class="glass rounded-2xl p-4 bg-white/70 dark:bg-black/50 flex items-center gap-4">
+        <label class="relative inline-block cursor-pointer" id="openMeProfile">
+          <img id="avatarImg" src="https://api.dicebear.com/9.x/thumbs/svg?seed=dojo" class="w-16 h-16 rounded-2xl object-cover" alt="avatar"/>
+          <input id="avatarInput" type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" title="Đổi ảnh đại diện"/>
+        </label>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold truncate" id="meName">—</div>
+          <div class="text-sm opacity-80 truncate" id="meEmail">—</div>
+          <div class="text-sm opacity-80">Follower: <span id="meFollower">0</span> <span id="followerBadge"></span></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input id="searchUser" placeholder="Tìm người dùng…" class="px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10"/>
+          <button id="openDM" class="px-3 py-2 rounded-xl bg-indigo-600 text-white">Nhắn tin</button>
+        </div>
+      </div>
+
+      <!-- Composer -->
+      <div class="glass rounded-2xl p-4 bg-white/70 dark:bg-black/50">
+        <h3 class="font-semibold mb-3">Đăng bài</h3>
+        <form id="postForm" class="space-y-3">
+          <textarea id="postText" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" rows="3" placeholder="Bạn đang nghĩ gì?" required></textarea>
+          <div class="flex flex-wrap items-center gap-3">
+            <input id="postFile" type="file" class="file:mr-3 file:px-3 file:py-2 file:rounded-xl file:border-0 file:bg-indigo-600 file:text-white"/>
+            <progress id="postProgress" value="0" max="100" class="hidden w-40"></progress>
+            <button class="px-4 py-2 rounded-xl bg-emerald-600 text-white">Đăng</button>
+            <span class="text-sm opacity-80" id="limitHint"></span>
+          </div>
+        </form>
+      </div>
+
+      <!-- Feed -->
+      <div class="glass rounded-2xl p-4 bg-white/70 dark:bg-black/50">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">Bài viết mới</h3>
+          <div class="text-sm opacity-75">Vuốt ⟷ để xem</div>
+        </div>
+        <div id="feed" class="post-grid flex gap-4 overflow-x-auto pb-4"></div>
+      </div>
+
+      <!-- DM drawer -->
+      <div id="dmPanel" class="hidden glass rounded-2xl p-4 bg-white/70 dark:bg-black/50">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Tin nhắn</h3>
+          <button id="closeDM" class="px-3 py-1.5 rounded-xl bg-black/70 text-white">Đóng</button>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="md:col-span-1 space-y-2" id="dmUsers"></div>
+          <div class="md:col-span-2">
+            <div id="dmThread" class="h-80 overflow-y-auto p-3 rounded-xl bg-black/5 dark:bg-white/5"></div>
+            <form id="dmForm" class="mt-3 flex gap-2">
+              <input id="dmInput" class="flex-1 px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Nhập tin nhắn…"/>
+              <button class="px-4 py-2 rounded-xl bg-indigo-600 text-white">Gửi</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Vault (kho lưu trữ) -->
+      <div id="adminVault" class="admin-only glass rounded-2xl p-4 bg-white/70 dark:bg-black/50">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Kho lưu trữ dữ liệu (Admin)</h3>
+          <button id="deleteAllPosts" class="px-3 py-2 rounded-xl bg-red-600 text-white">Xoá TẤT CẢ bài viết</button>
+        </div>
+        <div class="flex items-center gap-2 mb-3">
+          <input type="file" id="vaultFile" class="file:mr-3 file:px-3 file:py-2 file:rounded-xl file:border-0 file:bg-indigo-600 file:text-white"/>
+          <button id="uploadVault" class="px-3 py-2 rounded-xl bg-indigo-600 text-white">Tải lên kho</button>
+          <button id="refreshVault" class="px-3 py-2 rounded-xl bg-black/70 text-white">Làm mới</button>
+        </div>
+        <ul id="vaultList" class="text-sm space-y-1"></ul>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ===== Profile Overlay (route #/u/:uid) ===== -->
+  <div id="profileOverlay" class="glass bg-black/50">
+    <div class="mx-auto max-w-3xl mt-10 mb-10 p-4 rounded-2xl bg-white/80 dark:bg-black/70">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-lg">Hồ sơ người dùng</h3>
+        <button id="closeProfile" class="px-3 py-1.5 rounded-xl bg-black/70 text-white">Đóng</button>
+      </div>
+      <div id="profileHeader" class="mt-3 flex items-center gap-4">
+        <img id="pAvatar" class="w-20 h-20 rounded-2xl object-cover" src="">
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold truncate" id="pName">—</div>
+          <div class="text-sm opacity-80" id="pEmail">—</div>
+          <div class="text-sm opacity-80" id="pStatus">—</div>
+          <div class="text-sm opacity-80">Follower: <span id="pFollowers">0</span> <span id="pBadge"></span></div>
+        </div>
+        <div class="flex flex-col gap-2 items-end">
+          <div class="text-xs opacity-70">ID: <span id="pUid"></span></div>
+          <button id="pFollowBtn" class="px-3 py-1.5 rounded-xl bg-black/70 text-white">Follow</button>
+          <button id="pMessageBtn" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white">Nhắn tin</button>
+        </div>
+      </div>
+      <div class="mt-4">
+        <h4 class="font-semibold mb-2">Bài viết</h4>
+        <div id="pPosts" class="grid sm:grid-cols-2 gap-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Post Template ===== -->
+  <template id="postTpl">
+    <article class="relative post-card min-w-[320px] max-w-[480px] w-[90vw] rounded-2xl p-4 bg-[var(--card)] dark:bg-[var(--cardDark)] glass">
+      <header class="flex items-center gap-3">
+        <img class="w-12 h-12 rounded-xl object-cover author-avatar cursor-pointer"/>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold flex items-center gap-1">
+            <button class="author-name truncate text-left underline-offset-2 hover:underline"></button>
+            <span class="follow-badge"></span>
+          </div>
+          <div class="text-xs opacity-70"><span class="ts"></span> • <span class="views"></span> <span class="hot"></span></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="followBtn px-2 py-1 rounded-lg bg-black/70 text-white text-xs">Follow</button>
+          <button class="delBtn px-2 py-1 rounded-lg bg-red-600 text-white text-xs">Xoá</button>
+        </div>
+      </header>
+      <div class="mt-3 text-sm content"></div>
+      <img class="mt-3 rounded-xl media-img hidden"/>
+      <video class="mt-3 rounded-xl media-video hidden" controls playsinline></video>
+      <audio class="mt-3 w-full media-audio hidden" controls></audio>
+      <a class="mt-3 underline text-sm media-file hidden" target="_blank">Tải tệp đính kèm</a>
+      <div class="mt-3 flex items-center gap-2">
+        <input class="commentInput flex-1 px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10" placeholder="Bình luận…"/>
+        <button class="commentBtn px-3 py-2 rounded-xl bg-indigo-600 text-white">Gửi</button>
+      </div>
+      <div class="comment-stream mt-3 rounded-xl bg-black/5 dark:bg-white/5 p-2 space-y-1"></div>
+      <div class="emoji-bubble"><div class="px-3 py-2 rounded-xl bg-black/70 text-white text-xl select-none">😀 😍 👍 🔥 😆 😮 😢 😡</div></div>
+      <div class="mt-2 text-sm opacity-80">Reacts: <span class="reacts"></span></div>
+    </article>
+  </template>
+
+  <!-- ===== Floating Music Player (Code 2 mở rộng) ===== -->
+  <div id="musicFloating" class="w-56 rounded-2xl p-3 glass bg-white/80 dark:bg-black/50 shadow-xl">
+    <div class="text-sm font-semibold mb-2">🎵 Nhạc nền</div>
+    <select id="musicSelect" class="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-white/10">
+      <option value="">Chọn bài</option>
+      <option value="./deanhluongthien.mp3">Để Anh Lương Thiện Remix</option>
+      <option value="./emcuoiroia.mp3">Em Cưới Rồi À Remix</option>
+      <option value="./freemanxlowremix.mp3">Free Man x Low Remix</option>
+      <option value="./slayphonk.mp3">Slay Phonk</option>
+      <option value="./Nk.mp3">Yêu em rất nhiều</option>
+      <option value="./nghebaitrinhchua.mp3">Nghe Bài Trình Chưa ??</option>
+      <option value="./Quangay.mp3">Tại sao Quân là gay ?</option>
+      <option value="./B4BxAdamn.mp3">Mashup Band 4 Band x Adamn</option>
+      <option value="./thaproitudo.mp3">Tháp Rơi Tự Do</option>
+    </select>
+    <div class="mt-2 flex items-center gap-2">
+      <button id="musicPlay" class="flex-1 px-3 py-2 rounded-xl bg-indigo-600 text-white">Phát</button>
+      <button id="musicPause" class="px-3 py-2 rounded-xl bg-black/70 text-white">Tạm dừng</button>
+    </div>
+    <audio id="bgMusic" loop hidden></audio>
+  </div>
+
+  <!-- ===== Firebase SDKs (v12) ===== -->
+  <script type="module">
+    // ==== Firebase config của bạn ====
+    const firebaseConfig = {
+      apiKey: "AIzaSyBsLXs9rZROGQJjIYxGommG00Jf4Xxs2w0",
+      authDomain: "hust-3d8f5.firebaseapp.com",
+      projectId: "hust-3d8f5",
+      storageBucket: "hust-3d8f5.firebasestorage.app",
+      messagingSenderId: "208271977864",
+      appId: "1:208271977864:web:62ddf6649d8fe16019de3d",
+      measurementId: "G-XZGDGMSG97"
+    };
+
+    // ===== INIT Firebase =====
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, addDoc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, deleteDoc, limit, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    import { getStorage, ref as sRef, uploadBytesResumable, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+    import { getDatabase, ref, onValue, onDisconnect, set, remove } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js";
+
+    const app = initializeApp(firebaseConfig);
+    getAnalytics(app);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    const rtdb = getDatabase(app);
+    await setPersistence(auth, browserLocalPersistence); // không đăng xuất khi tải lại trang
+
+    // ====== Admin ======
+    const ADMIN_EMAILS = ["iloveanhtu09@gmail.com"];
+
+    // ===== Helpers =====
+    const $ = (s,p=document)=>p.querySelector(s);
+    const $$ = (s,p=document)=>[...p.querySelectorAll(s)];
+    const fmt = ts=> new Date(ts?.seconds? ts.seconds*1000: ts).toLocaleString('vi-VN');
+    const fileKind = (name,type='')=>{
+      const t = type.toLowerCase();
+      if(t.startsWith('image/')) return 'image';
+      if(t.startsWith('video/')) return 'video';
+      if(t.startsWith('audio/')) return 'audio';
+      const ext = (name||'').split('.').pop()?.toLowerCase();
+      if(['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return 'image';
+      if(['mp4','webm','mov','m4v'].includes(ext)) return 'video';
+      if(['mp3','wav','aac','ogg'].includes(ext)) return 'audio';
+      return 'file';
+    };
+
+    // ===== Theme toggle =====
+    const themeToggle = $('#themeToggle');
+    document.documentElement.classList.toggle('dark', localStorage.getItem('theme')==='dark');
+    themeToggle.addEventListener('click',()=>{
+      const d = !document.documentElement.classList.contains('dark');
+      document.documentElement.classList.toggle('dark', d);
+      localStorage.setItem('theme', d? 'dark':'light');
+    });
+
+    // ===== Background toggle =====
+    const bgToggle = $('#bgToggle');
+    const bgVideo = $('#bgVideo');
+    const bgOverlay = $('#bgOverlay');
+    bgToggle.addEventListener('click', ()=>{
+      const off = !bgVideo.paused;
+      if(off){ bgVideo.pause(); bgOverlay.style.background='linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.85))'; bgToggle.textContent='Bật nền'; }
+      else { bgVideo.play(); bgOverlay.style.background='linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.25))'; bgToggle.textContent='Tắt nền'; }
+    });
+
+    // ===== Music floating =====
+    const player = $('#bgMusic');
+    $('#musicSelect').addEventListener('change', e=>{ const v=e.target.value; if(!v) return; player.src=v; player.play().catch(()=>{}); });
+    $('#musicPlay').addEventListener('click', ()=> player.play().catch(()=>{}));
+    $('#musicPause').addEventListener('click', ()=> player.pause());
+
+    // ===== Auth =====
+    const authView = $('#authView');
+    const appView  = $('#appView');
+    const logoutBtn = $('#logoutBtn');
+
+    $('#registerForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const email = $('#regEmail').value.trim();
+      const pass  = $('#regPassword').value;
+      const name  = $('#regDisplayName').value.trim();
+      const cr = await createUserWithEmailAndPassword(auth,email,pass);
+      await updateProfile(cr.user,{ displayName:name });
+      await setDoc(doc(db,'users',cr.user.uid),{
+        displayName:name, email, createdAt: serverTimestamp(), avatar:null, followers:0,
+        role: ADMIN_EMAILS.includes(email)? 'admin':'user'
+      });
+    });
+
+    $('#loginForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const email = $('#loginEmail').value.trim();
+      const pass  = $('#loginPassword').value;
+      const cr = await signInWithEmailAndPassword(auth,email,pass);
+      const uref = doc(db,'users',cr.user.uid);
+      const us = await getDoc(uref);
+      if(!us.exists()){
+        await setDoc(uref,{ displayName: cr.user.displayName||email, email, createdAt: serverTimestamp(), avatar:null, followers:0, role: ADMIN_EMAILS.includes(email)? 'admin':'user' });
+      } else if(ADMIN_EMAILS.includes(email) && (us.data().role!=='admin')){
+        await updateDoc(uref,{ role:'admin' });
+      }
+    });
+
+    $('#forgotBtn').addEventListener('click', async ()=>{
+      const email = prompt('Nhập email để đặt lại mật khẩu');
+      if(email){ await sendPasswordResetEmail(auth,email); alert('Đã gửi email đặt lại mật khẩu'); }
+    });
+
+    logoutBtn.addEventListener('click', ()=> signOut(auth));
+
+    // ===== Presence (online count) via RTDB =====
+    const onlineCountEl = $('#onlineCount');
+    let myPresenceRef;
+    function setupPresence(user){
+      const presenceRef = ref(rtdb, 'presence');
+      myPresenceRef = ref(rtdb, `presence/${user.uid}`);
+      set(myPresenceRef, { displayName: user.displayName || user.email, ts: Date.now() });
+      onDisconnect(myPresenceRef).remove();
+      onValue(presenceRef, snap=>{
+        const data = snap.val()||{}; onlineCountEl.textContent = `${Object.keys(data).length} online`;
+      });
+      setInterval(()=> set(myPresenceRef, { displayName: user.displayName||user.email, ts: Date.now()}), 30000);
+    }
+    async function getPresence(uid){
+      return new Promise(res=>{
+        onValue(ref(rtdb, `presence/${uid}`), s=> res(s.val()), { onlyOnce:true });
+      });
+    }
+
+    // ===== Random banner =====
+    const badgeRandom = $('#badgeRandom');
+    async function showRandomBadge(){
+      const qs = await getDocs(query(collection(db,'users'), limit(50)));
+      const arr = qs.docs.map(d=>({id:d.id,...d.data()}));
+      if(!arr.length) return;
+      const pick = arr[Math.floor(Math.random()*arr.length)];
+      badgeRandom.textContent = `ID User: ${pick.id}`;
+      badgeRandom.classList.remove('hidden');
+      setTimeout(()=> badgeRandom.classList.add('hidden'), 12000);
+    }
+    setInterval(showRandomBadge, 5*60*1000);
+
+    // ===== Profile + avatar =====
+    const meName=$('#meName'), meEmail=$('#meEmail'), meFollower=$('#meFollower'), followerBadge=$('#followerBadge');
+    const avatarImg=$('#avatarImg'), avatarInput=$('#avatarInput');
+    const openMeProfile = $('#openMeProfile');
+
+    avatarInput.addEventListener('change', async e=>{
+      const f = e.target.files?.[0]; if(!f || !auth.currentUser) return;
+      const r = sRef(storage, `avatars/${auth.currentUser.uid}`);
+      const task = uploadBytesResumable(r, f);
+      task.on('state_changed', ()=>{}, console.error, async ()=>{
+        const url = await getDownloadURL(task.snapshot.ref);
+        await updateDoc(doc(db,'users',auth.currentUser.uid), { avatar:url });
+        avatarImg.src = url;
+      });
+    });
+
+    // ===== Daily post limit =====
+    async function canPost(uid, isAdmin){
+      if(isAdmin) return true;
+      const qs = await getDocs(query(collection(db,'posts'), where('uid','==',uid), orderBy('createdAt','desc'), limit(1)));
+      if(qs.empty) return true;
+      const last = qs.docs[0].data();
+      const lastDate = new Date((last.createdAt?.seconds||0)*1000).toDateString();
+      return lastDate !== new Date().toDateString();
+    }
+
+    // ===== Notifications =====
+    function pushNotif(toUid, data){
+      if(!toUid) return;
+      // data: {type, text, link?, fromUid?, seen:false}
+      addDoc(collection(db,'users',toUid,'notifs'), { ...data, at: serverTimestamp(), seen:false });
+    }
+    const notifBtn = $('#notifBtn'), notifDropdown=$('#notifDropdown'), notifList=$('#notifList'), notifBadge=$('#notifBadge'), markAllRead=$('#markAllRead');
+    notifBtn.addEventListener('click', ()=> notifDropdown.classList.toggle('hidden'));
+    markAllRead.addEventListener('click', async ()=>{
+      const me=auth.currentUser; if(!me) return;
+      const qs=await getDocs(collection(db,'users',me.uid,'notifs'));
+      const batch=writeBatch(db);
+      qs.forEach(d=> batch.update(doc(db,'users',me.uid,'notifs',d.id), {seen:true}));
+      await batch.commit();
+    });
+    function openLink(link){ if(link){ location.hash = link; } }
+
+    // ===== Create post =====
+    const postForm = $('#postForm');
+    const limitHint = $('#limitHint');
+    const postProgress = $('#postProgress');
+
+    async function refreshLimitHint(){
+      const user=auth.currentUser; if(!user){ limitHint.textContent=''; return; }
+      const prof=await getDoc(doc(db,'users',user.uid)); const role=prof.data()?.role||'user';
+      const ok = await canPost(user.uid, role==='admin');
+      limitHint.textContent = ok? (role==='admin'? 'Admin: không giới hạn':'Bạn còn 1 lần đăng hôm nay'): 'Đã dùng lượt hôm nay';
+    }
+
+    postForm.addEventListener('submit', async e=>{
+      e.preventDefault();
+      const user = auth.currentUser; if(!user) return;
+      const prof = await getDoc(doc(db,'users',user.uid));
+      const role = prof.data()?.role || 'user';
+      const allowed = await canPost(user.uid, role==='admin');
+      if(!allowed){ alert('Bạn chỉ được đăng 1 bài/ngày.'); return; }
+      if(!confirm('Xác nhận đăng bài?')) return;
+
+      const text = $('#postText').value.trim();
+      const file = $('#postFile').files?.[0];
+      let mediaURL=null, mediaType=null, mediaName=null;
+
+      if(file){
+        mediaType = file.type; mediaName=file.name;
+        const r = sRef(storage, `posts/${user.uid}/${Date.now()}_${file.name}`);
+        const task = uploadBytesResumable(r, file);
+        postProgress.classList.remove('hidden');
+        task.on('state_changed', s=>{
+          postProgress.value = Math.round((s.bytesTransferred/s.totalBytes)*100);
+        }, err=>{
+          console.error(err); alert('Tải tệp thất bại'); postProgress.classList.add('hidden');
+        }, async ()=>{
+          mediaURL = await getDownloadURL(task.snapshot.ref);
+          postProgress.classList.add('hidden');
+          await savePost();
+        });
+      }else{
+        await savePost();
+      }
+
+      async function savePost(){
+        const postRef = await addDoc(collection(db,'posts'),{
+          uid: user.uid, text, mediaURL, mediaType, mediaName,
+          createdAt: serverTimestamp(), views:0, reacts:{},
+        });
+        // gửi thông báo cho follower của mình (mềm)
+        const fs = await getDocs(collection(db,'users',user.uid,'followers'));
+        fs.forEach(f=> pushNotif(f.id, {type:'post', text:`${prof.data()?.displayName||user.email} vừa đăng bài mới`, link:`#/post/${postRef.id}`, fromUid:user.uid }));
+        $('#postText').value=''; $('#postFile').value=''; refreshLimitHint();
+      }
+    });
+
+    // ===== Feed =====
+    const feed = $('#feed');
+    const postTpl = $('#postTpl');
+
+    async function isFollowing(targetUid){
+      const me=auth.currentUser; if(!me) return false;
+      const d=await getDoc(doc(db,'users',targetUid,'followers', me.uid));
+      return d.exists();
+    }
+
+    function bindFollowButton(btn, targetUid){
+      async function update(){
+        btn.disabled=true;
+        const yes = await isFollowing(targetUid);
+        btn.textContent = yes? 'Unfollow':'Follow';
+        btn.classList.toggle('bg-black/70', !yes);
+        btn.classList.toggle('bg-amber-600', yes);
+        btn.disabled=false;
+      }
+      btn.onclick = async ()=>{
+        const me=auth.currentUser; if(!me||me.uid===targetUid) return;
+        const fRef = doc(db,'users',targetUid,'followers', me.uid);
+        const yes = await isFollowing(targetUid);
+        if(yes){ await deleteDoc(fRef); } else { await setDoc(fRef,{ at: serverTimestamp() }); pushNotif(targetUid,{type:'follow', text:`${me.displayName||me.email} đã follow bạn`, fromUid:me.uid, link:`#/u/${me.uid}`}); }
+        const followersSnap = await getDocs(collection(db,'users',targetUid,'followers'));
+        await updateDoc(doc(db,'users',targetUid),{ followers: followersSnap.size });
+        update();
+      };
+      update();
+    }
+
+    function openProfile(uid){ location.hash = `#/u/${uid}`; }
+
+    function renderPost(id, data, me){
+      let card = $(`[data-id="${id}"]`, feed);
+      if(!card){
+        card = postTpl.content.firstElementChild.cloneNode(true);
+        card.dataset.id = id;
+        feed.appendChild(card);
+        // Long-press emoji
+        let pressTimer; const bubble = $('.emoji-bubble', card);
+        card.addEventListener('touchstart', ()=>{ pressTimer=setTimeout(()=>{bubble.style.display='block'},450)}, {passive:true});
+        card.addEventListener('touchend', ()=>{ clearTimeout(pressTimer); setTimeout(()=> bubble.style.display='none', 800) }, {passive:true});
+        card.addEventListener('mousedown', ()=>{ pressTimer=setTimeout(()=>{bubble.style.display='block'},500)});
+        card.addEventListener('mouseup', ()=>{ clearTimeout(pressTimer); setTimeout(()=> bubble.style.display='none', 800) });
+        bubble.addEventListener('click', e=>{
+          if(e.target.textContent.trim()) reactToPost(id, e.target.textContent.trim());
+        });
+        $('.commentBtn', card).addEventListener('click', ()=> doComment(id, $('.commentInput',card).value, card, data.uid));
+        $('.delBtn', card).addEventListener('click', ()=> deletePost(id, data.uid));
+        // open profile
+        $('.author-avatar',card).addEventListener('click', ()=> openProfile(data.uid));
+        $('.author-name',card).addEventListener('click', ()=> openProfile(data.uid));
+      }
+      // author
+      getDoc(doc(db,'users',data.uid)).then(u=>{
+        const ud=u.data()||{};
+        $('.author-name',card).textContent = ud.displayName||'Ẩn danh';
+        $('.author-avatar',card).src = ud.avatar || `https://api.dicebear.com/9.x/thumbs/svg?seed=${data.uid.slice(0,6)}`;
+        const badge = $('.follow-badge',card);
+        if((ud.followers||0) >= 5) { badge.textContent='💎' } else { badge.textContent=''; }
+      });
+      bindFollowButton($('.followBtn',card), data.uid);
+
+      // content + media
+      $('.content',card).textContent = data.text||'';
+      const kind = fileKind(data.mediaName, data.mediaType);
+      const img=$('.media-img',card), vid=$('.media-video',card), aud=$('.media-audio',card), fileA=$('.media-file',card);
+      img.classList.add('hidden'); vid.classList.add('hidden'); aud.classList.add('hidden'); fileA.classList.add('hidden');
+      if(data.mediaURL){
+        if(kind==='image'){ img.src=data.mediaURL; img.classList.remove('hidden'); }
+        else if(kind==='video'){ vid.src=data.mediaURL; vid.classList.remove('hidden'); }
+        else if(kind==='audio'){ aud.src=data.mediaURL; aud.classList.remove('hidden'); }
+        else { fileA.href=data.mediaURL; fileA.textContent = `Tải ${data.mediaName||'tệp đính kèm'}`; fileA.classList.remove('hidden'); }
+      }
+
+      $('.ts',card).textContent = fmt(data.createdAt);
+      $('.views',card).textContent = `${data.views||0} lượt xem`;
+      $('.hot',card).textContent = (data.views||0) >= 10 ? '🔥' : '';
+      const reacts = data.reacts||{}; $('.reacts',card).textContent = Object.entries(reacts).map(([k,v])=>`${k} ${v}`).join(' · ');
+
+      // comments stream
+      const cWrap = $('.comment-stream',card);
+      onSnapshot(query(collection(db,'posts',id,'comments'), orderBy('createdAt','desc'), limit(30)), snap=>{
+        cWrap.innerHTML='';
+        snap.forEach(d=>{
+          const c=d.data();
+          const el=document.createElement('div');
+          el.className='text-sm';
+          el.textContent=`${c.byName||'Ẩn danh'}: ${c.text}`;
+          cWrap.prepend(el);
+        });
+        cWrap.scrollTop = cWrap.scrollHeight;
+      });
+
+      // view counting once per session per post
+      if(me){
+        const key = 'viewed_'+id; if(!sessionStorage.getItem(key)){
+          sessionStorage.setItem(key,'1');
+          updateDoc(doc(db,'posts',id),{ views:(data.views||0)+1 });
+        }
+      }
+    }
+
+    async function reactToPost(id, emoji){
+      const postRef = doc(db,'posts',id);
+      const snap = await getDoc(postRef); const data = snap.data()||{}; const reacts=data.reacts||{};
+      reacts[emoji] = (reacts[emoji]||0) + 1;
+      await updateDoc(postRef,{ reacts });
+    }
+
+    async function doComment(id, text, card, ownerUid){
+      text = (text||'').trim(); if(!text) return; $('.commentInput',card).value='';
+      const user = auth.currentUser; if(!user) return;
+      const meDoc = await getDoc(doc(db,'users',user.uid));
+      await addDoc(collection(db,'posts',id,'comments'),{ text, by:user.uid, byName: meDoc.data()?.displayName||user.email, createdAt: serverTimestamp() });
+      if(ownerUid && ownerUid!==user.uid){ pushNotif(ownerUid, {type:'comment', text:`${meDoc.data()?.displayName||user.email} đã bình luận bài của bạn`, link:`#/post/${id}`, fromUid:user.uid}); }
+    }
+
+    async function deletePost(id, ownerUid){
+      const me = auth.currentUser; if(!me) return;
+      const meRole = (await getDoc(doc(db,'users',me.uid))).data()?.role||'user';
+      if(meRole!=='admin' && me.uid!==ownerUid){ return alert('Bạn không có quyền xoá bài này.'); }
+      if(confirm('Xoá bài viết?')) await deleteDoc(doc(db,'posts',id));
+    }
+
+    // ===== Feed live query =====
+    onSnapshot(query(collection(db,'posts'), orderBy('createdAt','desc'), limit(50)), snap=>{
+      const me = auth.currentUser;
+      snap.docChanges().forEach(ch=>{
+        if(ch.type==='removed'){ const el=$(`[data-id="${ch.doc.id}"]`,feed); if(el) el.remove(); }
+        else renderPost(ch.doc.id, ch.doc.data(), !!me);
+      });
+    });
+
+    // ===== DM (Nâng cấp index + unread) =====
+    const dmPanel=$('#dmPanel'), openDM=$('#openDM'), closeDM=$('#closeDM'), dmUsers=$('#dmUsers'), dmThread=$('#dmThread');
+    let currentDM=null; // uid
+
+    openDM.addEventListener('click', ()=> dmPanel.classList.remove('hidden'));
+    closeDM.addEventListener('click', ()=> dmPanel.classList.add('hidden'));
+
+    function chatId(a,b){ return [a,b].sort().join('_'); }
+
+    $('#dmForm').addEventListener('submit', async e=>{
+      e.preventDefault(); if(!currentDM||!auth.currentUser) return; const t=$('#dmInput').value.trim(); if(!t) return; $('#dmInput').value='';
+      const me = auth.currentUser;
+      const cid=chatId(me.uid,currentDM);
+      await addDoc(collection(db,'chats',cid,'msgs'), { text:t, by:me.uid, at: serverTimestamp() });
+      // cập nhật index cho cả hai
+      const idxMe   = doc(db,'users',me.uid,'chats', currentDM);
+      const idxPeer = doc(db,'users',currentDM,'chats', me.uid);
+      await setDoc(idxMe,   { peer: currentDM, lastText:t, lastAt: serverTimestamp(), unread:0 }, {merge:true});
+      await setDoc(idxPeer, { peer: me.uid,    lastText:t, lastAt: serverTimestamp(), unread: (await getDoc(idxPeer)).data()?.unread + 1 || 1 }, {merge:true});
+      // thông báo
+      pushNotif(currentDM, {type:'message', text:`Bạn có tin nhắn mới`, link:`#/chat/${me.uid}`, fromUid:me.uid});
+    });
+
+    async function markChatRead(peerUid){
+      const me = auth.currentUser; if(!me) return;
+      await setDoc(doc(db,'users',me.uid,'chats', peerUid), { unread:0 }, {merge:true});
+    }
+
+    function loadThread(){
+      if(!currentDM || !auth.currentUser) return;
+      const me=auth.currentUser; const cid = chatId(me.uid, currentDM);
+      onSnapshot(query(collection(db,'chats',cid,'msgs'), orderBy('at','asc'), limit(200)), snap=>{
+        dmThread.innerHTML='';
+        snap.forEach(m=>{
+          const d=m.data(); const mine = d.by===me.uid;
+          const row=document.createElement('div');
+          row.className=`mb-2 flex ${mine? 'justify-end':''}`;
+          row.innerHTML=`<div class="max-w-[70%] px-3 py-2 rounded-xl ${mine? 'bg-indigo-600 text-white':'bg-black/10 dark:bg-white/10'}">${d.text}</div>`;
+          dmThread.appendChild(row);
+        });
+        dmThread.scrollTop=dmThread.scrollHeight;
+      });
+      markChatRead(currentDM);
+    }
+
+    // ===== Profile overlay logic =====
+    const profileOverlay = $('#profileOverlay'), closeProfile=$('#closeProfile');
+    const pAvatar=$('#pAvatar'), pName=$('#pName'), pEmail=$('#pEmail'), pStatus=$('#pStatus'), pFollowers=$('#pFollowers'), pBadge=$('#pBadge'), pUid=$('#pUid'), pPosts=$('#pPosts'), pFollowBtn=$('#pFollowBtn'), pMessageBtn=$('#pMessageBtn');
+
+    closeProfile.addEventListener('click', ()=>{ location.hash=''; });
+
+    async function renderProfile(uid){
+      const u = await getDoc(doc(db,'users',uid)); const d=u.data()||{};
+      pAvatar.src = d.avatar || `https://api.dicebear.com/9.x/thumbs/svg?seed=${uid.slice(0,6)}`;
+      pName.textContent = d.displayName||'Ẩn danh';
+      pEmail.textContent = d.email||'';
+      pFollowers.textContent = d.followers||0;
+      pBadge.textContent = (d.followers||0) >= 5 ? '💎' : '';
+      pUid.textContent = uid;
+
+      const pr = await getPresence(uid);
+      if(pr){ pStatus.textContent = 'Đang hoạt động • Online'; }
+      else { pStatus.textContent = 'Ngoại tuyến'; }
+
+      // follow button
+      bindFollowButton(pFollowBtn, uid);
+      pMessageBtn.onclick = ()=>{ currentDM=uid; dmPanel.classList.remove('hidden'); loadThread(); };
+
+      // load posts of user
+      onSnapshot(query(collection(db,'posts'), where('uid','==',uid), orderBy('createdAt','desc'), limit(50)), snap=>{
+        pPosts.innerHTML='';
+        snap.forEach(d=>{
+          const data=d.data();
+          const item=document.createElement('div');
+          item.className='rounded-xl p-3 glass bg-white/70 dark:bg-black/50';
+          const kind=fileKind(data.mediaName, data.mediaType);
+          let mediaHTML='';
+          if(data.mediaURL){
+            if(kind==='image') mediaHTML=`<img src="${data.mediaURL}" class="mt-2 rounded-lg"/>`;
+            else if(kind==='video') mediaHTML=`<video src="${data.mediaURL}" class="mt-2 rounded-lg" controls playsinline></video>`;
+            else if(kind==='audio') mediaHTML=`<audio src="${data.mediaURL}" class="mt-2 w-full" controls></audio>`;
+            else mediaHTML=`<a href="${data.mediaURL}" target="_blank" class="underline">Tệp đính kèm</a>`;
+          }
+          item.innerHTML=`<div class="text-sm">${data.text||''}</div>${mediaHTML}<div class="text-xs opacity-70 mt-2">${fmt(data.createdAt)} • ${data.views||0} lượt xem</div>`;
+          pPosts.appendChild(item);
+        });
+      });
+
+      profileOverlay.classList.add('show');
+    }
+
+    // ===== Router (hash) for profile and quick chat) =====
+    window.addEventListener('hashchange', handleRoute);
+    async function handleRoute(){
+      const h=location.hash;
+      // profile
+      const m = h.match(/^#\/u\/(.+)$/);
+      if(m){ await renderProfile(m[1]); return; }
+      // chat direct
+      const c = h.match(/^#\/chat\/(.+)$/);
+      if(c){ currentDM=c[1]; dmPanel.classList.remove('hidden'); loadThread(); }
+      // open specific post (scroll if present)
+      const p = h.match(/^#\/post\/(.+)$/);
+      if(p){
+        const el = $(`[data-id="${p[1]}"]`); if(el){ el.scrollIntoView({behavior:'smooth', inline:'center'}); }
+      }
+      // default
+      if(!m) profileOverlay.classList.remove('show');
+    }
+
+    // ===== Notifications live listener =====
+    function watchNotifs(uid){
+      onSnapshot(query(collection(db,'users',uid,'notifs'), orderBy('at','desc'), limit(50)), snap=>{
+        notifList.innerHTML='';
+        let unread=0;
+        snap.forEach(n=>{
+          const d=n.data();
+          if(!d.seen) unread++;
+          const li=document.createElement('li');
+          li.className='px-2 py-1 rounded hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer';
+          li.innerHTML=`<div class="text-sm">${d.text}</div><div class="text-xs opacity-70">${fmt(d.at)}</div>`;
+          li.onclick=()=>{ openLink(d.link); };
+          notifList.appendChild(li);
+        });
+        if(unread>0){ notifBadge.textContent = unread; notifBadge.classList.remove('hidden'); } else { notifBadge.classList.add('hidden'); }
+      });
+    }
+
+    // ===== DM list live listener =====
+    function watchChatIndex(uid){
+      onSnapshot(query(collection(db,'users',uid,'chats'), orderBy('lastAt','desc'), limit(100)), async snap=>{
+        dmUsers.innerHTML='';
+        snap.forEach(async d=>{
+          const it=d.data();
+          const u = await getDoc(doc(db,'users', it.peer));
+          const name=u.data()?.displayName||u.data()?.email||'User';
+          const btn=document.createElement('button');
+          btn.className='w-full px-3 py-2 rounded-xl bg-black/70 text-white text-left flex items-center justify-between';
+          btn.innerHTML=`<span>${name}</span><span class="text-xs ${it.unread? 'bg-red-600 px-2 rounded-full':''}">${it.unread? it.unread:''}</span>`;
+          btn.onclick=()=>{ currentDM=it.peer; loadThread(); };
+          dmUsers.appendChild(btn);
+        });
+      });
+    }
+
+    // ===== Search user quick follow =====
+    $('#searchUser').addEventListener('keydown', async e=>{
+      if(e.key!=='Enter') return; e.preventDefault(); const q=e.target.value.trim(); if(!q) return;
+      const res = await getDocs(query(collection(db,'users'), where('displayName','==',q)));
+      if(res.empty) return alert('Không tìm thấy');
+      const t=res.docs[0]; if(confirm(`Mở hồ sơ ${t.data().displayName}?`)){ openProfile(t.id); }
+    });
+
+    // ===== Admin actions =====
+    $('#deleteAllPosts').addEventListener('click', async ()=>{
+      const me=auth.currentUser; if(!me) return; const role=(await getDoc(doc(db,'users',me.uid))).data()?.role||'user';
+      if(role!=='admin') return alert('Chỉ admin');
+      if(!confirm('Xác nhận xoá TẤT CẢ bài viết?')) return;
+      const qs=await getDocs(query(collection(db,'posts'), limit(200)));
+      const batch=writeBatch(db); qs.docs.forEach(d=> batch.delete(doc(db,'posts',d.id))); await batch.commit();
+      alert('Đã xoá.');
+    });
+
+    async function refreshVaultList(){
+      const me=auth.currentUser; if(!me) return; const role=(await getDoc(doc(db,'users',me.uid))).data()?.role||'user';
+      if(role!=='admin') return;
+      const ul=$('#vaultList'); ul.innerHTML='';
+      const folder=sRef(storage,'vault/');
+      const items = await listAll(folder);
+      for(const it of items.items){
+        const url=await getDownloadURL(it);
+        const li=document.createElement('li');
+        li.innerHTML=`<a class="underline" href="${url}" target="_blank">${it.name}</a>`;
+        ul.appendChild(li);
+      }
+    }
+    $('#uploadVault').addEventListener('click', async ()=>{
+      const f=$('#vaultFile').files?.[0]; if(!f) return; const me=auth.currentUser; const role=(await getDoc(doc(db,'users',me.uid))).data()?.role||'user'; if(role!=='admin') return alert('Chỉ admin');
+      const r=sRef(storage, `vault/${Date.now()}_${f.name}`); const task=uploadBytesResumable(r,f);
+      task.on('state_changed',()=>{},console.error, refreshVaultList);
+    });
+    $('#refreshVault').addEventListener('click', refreshVaultList);
+
+    // ===== Auth state =====
+    onAuthStateChanged(auth, async user=>{
+      if(user){
+        authView.classList.add('hidden'); appView.classList.remove('hidden'); logoutBtn.classList.remove('hidden');
+        setupPresence(user); showRandomBadge(); refreshLimitHint(); handleRoute();
+        const u = await getDoc(doc(db,'users',user.uid));
+        const d = u.data()||{}; meName.textContent=d.displayName||user.email; meEmail.textContent=user.email; meFollower.textContent = d.followers||0; followerBadge.textContent = (d.followers||0)>=5 ? '💎':'';
+        if(d.avatar) avatarImg.src=d.avatar;
+
+        // list users for DM (fallback if chưa có index)
+        onSnapshot(query(collection(db,'users'), limit(50)), snap=>{
+          if(dmUsers.childElementCount>0) return; // đã có index sẽ ghi đè
+          dmUsers.innerHTML='';
+          snap.forEach(x=>{
+            if(x.id===user.uid) return;
+            const btn=document.createElement('button');
+            btn.className='w-full px-3 py-2 rounded-xl bg-black/70 text-white text-left';
+            btn.textContent=(x.data().displayName||x.data().email||'User')+` — ${x.id.slice(0,6)}`;
+            btn.onclick=()=>{ currentDM=x.id; loadThread(); };
+            dmUsers.appendChild(btn);
+          });
+        });
+
+        // Enable admin vault
+        const role = d.role||'user';
+        if(role==='admin'){ $('#adminVault').classList.remove('admin-only'); refreshVaultList(); }
+
+        // watch notifications + chat index
+        watchNotifs(user.uid);
+        watchChatIndex(user.uid);
+
+        // open my profile quick
+        openMeProfile.addEventListener('click', ()=> openProfile(user.uid));
+
+      } else {
+        authView.classList.remove('hidden'); appView.classList.add('hidden'); logoutBtn.classList.add('hidden');
+        notifDropdown.classList.add('hidden');
+      }
+    });
+
+  </script>
+</body>
+</html>
